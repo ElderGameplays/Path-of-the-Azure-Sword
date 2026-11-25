@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Path of the Azure Sword</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Marcellus&family=Source+Serif+4:wght@400;600&display=swap">
+<style>
+:root{--bg:#13201e;--pn:#1b2d2a;--ln:#35504a;--tx:#e8e4d4;--mu:#94a8a0;--gd:#dbb55b;--hp:#c4573f;--qi:#5ab8c6;--cp:#9bc27a;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);color-scheme:dark}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--tx);font:16px/1.55 "Source Serif 4",Georgia,serif;background-image:radial-gradient(ellipse at 50% -10%,#24403a 0,transparent 60%)}
+h1,h2,h3{font-family:Marcellus,Georgia,serif;font-weight:400;margin:0}
+main{max-width:860px;margin:0 auto;padding:16px}
+h1{font-size:2rem;letter-spacing:.04em}
+.sub{color:var(--mu);margin:2px 0 14px}
+.hud{background:var(--pn);border:1px solid var(--ln);border-radius:6px;padding:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:8px 16px}
+.hud b{color:var(--gd);font-weight:600}
+.bar{height:9px;background:#0d1715;border-radius:5px;overflow:hidden;margin-top:3px}
+.bar i{display:block;height:100%}
+.row{display:flex;justify-content:space-between;font-size:.9rem}
+nav{display:flex;gap:6px;margin:14px 0;flex-wrap:wrap}
+button{font:inherit;background:#26403b;color:var(--tx);border:1px solid var(--ln);border-radius:4px;padding:7px 12px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--gd)}
+button:focus-visible{outline:2px solid var(--gd);outline-offset:2px}
+button:disabled{opacity:.4;cursor:not-allowed}
+nav button{font-family:Marcellus,serif;font-size:1.05rem;padding:8px 16px}
+nav button.on{background:var(--gd);color:#1a1a12;border-color:var(--gd)}
+.go{background:var(--gd);color:#1a1a12;border-color:var(--gd)}
+.dn{background:#5a2b22;border-color:#8a4334}
+.card{background:var(--pn);border:1px solid var(--ln);border-radius:6px;padding:14px;margin-bottom:12px}
+.card h3{font-size:1.25rem}
+.mu{color:var(--mu);font-size:.92rem}
+.act{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.q{border-top:1px dashed var(--ln);margin-top:10px;padding-top:10px}
+.log{background:#0e1917;border:1px solid var(--ln);border-radius:6px;padding:10px;height:170px;overflow-y:auto;font-size:.92rem;margin-top:14px}
+.log p{margin:0 0 3px}.log .g{color:var(--gd)}.log .r{color:#e58a76}.log .c{color:var(--qi)}
+.foe{font-size:1.3rem;font-family:Marcellus,serif}
+.spot.lock{opacity:.5}
+.spot.on{border-color:var(--cp)}
+</style>
+</head>
+<body>
+<main>
+<h1>Path of the Azure Sword</h1>
+<p class="sub">Cultivate qi, delve the Hollow Mountain dungeon, and rise from a nameless wanderer to a Transcendent.</p>
+<div id="hud" class="hud"></div>
+<nav id="nav"></nav>
+<div id="view"></div>
+<div id="log" class="log" aria-live="polite"></div>
+</main>
+<script>
+const STAGES=["Mortal Body","Third-Rate","Second-Rate","First-Rate","Peak Master","Transcendent"];
+const NEED=[200,500,1200,2800,6400,0];
+const SK={wind:{n:"Wind Slash",qi:10,m:1.7,d:"A cut of pressed air. 1.7x damage."},iron:{n:"Iron Body",qi:15,h:.35,d:"Harden the flesh and recover 35% HP."},plum:{n:"Plum Blossom Sword",qi:22,m:2.6,d:"Five thrusts that bloom as one. 2.6x damage."},rain:{n:"Heavenly Sword Rain",qi:45,m:4.5,d:"A thousand blades fall. 4.5x damage."}};
+const WP={rusty:{n:"Rusty Training Sword",a:2},iron:{n:"Ironwood Sword",a:8},moon:{n:"Moonlit Blade",a:16},azure:{n:"Azure Dragon Sword",a:30}};
+const SPOTS=[{n:"Courtyard Mat",s:0,r:2,d:"Thin qi, but safe ground for a beginner."},{n:"Bamboo Grove",s:1,r:5,d:"Wind through the stalks steadies the breath."},{n:"Thunder Waterfall",s:2,r:12,d:"Qi crashes down with the water."},{n:"Spirit Spring Cave",s:3,r:28,d:"A vein of dense qi runs beneath the stone."},{n:"Cloud Peak Summit",s:4,r:60,d:"Heaven and earth meet. Few can bear the pressure."}];
+const NPC={
+han:{n:"Elder Han",t:"Village Elder",s:0,say:"The bandits grow bold. Help the village and I will see you rewarded."},
+baek:{n:"Master Baek",t:"Fist Instructor",s:0,say:"Strength first. Technique follows the body."},
+ma:{n:"Peddler Ma",t:"Traveling Merchant",s:0,say:"Pills, blades, whatever keeps you breathing."},
+yeon:{n:"Hermit Yeon",t:"Sword Saint",s:1,say:"I do not teach the sword to the unawakened. Show me you have opened your gates."}};
+const QS=[
+{id:1,g:"han",n:"Thin the Bandits",d:"Defeat 3 monsters in the dungeon.",ty:"kill",goal:3,rw:{gold:60,xp:30}},
+{id:2,g:"han",n:"First Descent",d:"Reach dungeon floor 3.",ty:"floor",goal:3,after:1,rw:{wp:"iron"}},
+{id:3,g:"han",n:"Breath Like a River",d:"Cultivate 150 qi points.",ty:"cp",goal:150,after:2,rw:{sc:"iron",xp:40}},
+{id:4,g:"ma",n:"Pelts and Fangs",d:"Defeat 10 monsters.",ty:"kill",goal:10,after:1,rw:{gold:150}},
+{id:5,g:"ma",n:"Lost Cargo",d:"Reach dungeon floor 6.",ty:"floor",goal:6,after:4,rw:{gold:300,pills:3}},
+{id:6,g:"baek",n:"Open the Gates",d:"Break through to Third-Rate.",ty:"stage",goal:1,rw:{sc:"wind",xp:80}},
+{id:7,g:"yeon",n:"The Second Gate",d:"Break through to Second-Rate.",ty:"stage",goal:2,rw:{sc:"plum"}},
+{id:8,g:"yeon",n:"Guardian's Blade",d:"Reach dungeon floor 10.",ty:"floor",goal:10,after:7,rw:{wp:"moon",gold:400}},
+{id:9,g:"yeon",n:"Dragon's Trial",d:"Reach dungeon floor 15 as a First-Rate.",ty:"floor",goal:15,after:8,st:3,rw:{wp:"azure",xp:400}}];
+const FOES=[["Cave Bat","Bandit Thug","Wild Boar"],["Black Wind Bandit","Poison Spider","Rogue Disciple"],["Blood Fang Cultist","Iron Skin Ogre","Shadow Assassin"],["Demonic Sect Elder","Ghost Swordsman"],["Heavenly Demon Guard","Thousand-Year Serpent"]];
+
+const fresh=()=>({lv:1,xp:0,hp:60,str:6,vit:6,stage:0,cp:0,qi:30,gold:30,wp:"rusty",weps:["rusty"],skills:[],scrolls:[],pills:2,kills:0,maxF:0,totCp:0,q:{},done:{}});
+let S=fresh(),T="village",C=null,D={F:0,in:false},med=null,LG=[];
+try{const r=localStorage.getItem("murim1");if(r)S=Object.assign(fresh(),JSON.parse(r))}catch(e){}
+const save=()=>{try{localStorage.setItem("murim1",JSON.stringify(S))}catch(e){}};
+const mh=()=>40+S.vit*5+S.lv*5+S.stage*20,mq=()=>Math.round(30+S.stage*25+S.lv*2),need=()=>NEED[S.stage];
+const rnd=a=>a[Math.floor(Math.random()*a.length)];
+const wa=()=>WP[S.wp].a;
+function log(m,c=""){LG.push(`<p class="${c}">${m}</p>`);if(LG.length>60)LG.shift();const l=document.getElementById("log");l.innerHTML=LG.join("");l.scrollTop=l.scrollHeight}
+function gain(xp,gold){S.xp+=xp;S.gold+=gold;while(S.xp>=S.lv*45){S.xp-=S.lv*45;S.lv++;S.str+=2;S.vit+=1;S.hp=mh();log("Level "+S.lv+"! Strength and vitality rise.","g")}}
+const bar=(v,m,c)=>`<div class="bar"><i style="width:${Math.max(0,Math.min(100,v/m*100))}%;background:${c}"></i></div>`;
+function prog(q){const b=S.q[q.id];if(!b&&b!==0)return 0;return Math.min(q.goal,q.ty=="kill"?S.kills-b:q.ty=="cp"?Math.floor(S.totCp-b):q.ty=="floor"?S.maxF:S.stage)}
+const rwText=r=>[r.gold&&r.gold+" gold",r.xp&&r.xp+" XP",r.wp&&WP[r.wp].n,r.sc&&"Scroll: "+SK[r.sc].n,r.pills&&r.pills+" healing pills"].filter(Boolean).join(", ");
+
+function hud(){document.getElementById("hud").innerHTML=`
+<div><div class="row"><span><b>Lv ${S.lv}</b> · ${STAGES[S.stage]}</span><span>${Math.floor(S.gold)} gold</span></div>${bar(S.xp,S.lv*45,"var(--gd)")}<div class="mu">XP ${S.xp}/${S.lv*45}</div></div>
+<div><div class="row"><span>Health</span><span>${Math.ceil(S.hp)}/${mh()}</span></div>${bar(S.hp,mh(),"var(--hp)")}</div>
+<div><div class="row"><span>Qi</span><span>${Math.floor(S.qi)}/${mq()}</span></div>${bar(S.qi,mq(),"var(--qi)")}</div>
+<div><div class="row"><span>Cultivation</span><span>${need()?Math.floor(S.cp)+"/"+need():"Complete"}</span></div>${bar(S.cp,need()||1,"var(--cp)")}</div>`;
+const tabs=[["village","Village"],["cultivate","Cultivation"],["dungeon","Dungeon"],["self","Character"]];
+document.getElementById("nav").innerHTML=tabs.map(t=>`<button class="${T==t[0]?"on":""}" onclick="A.tab('${t[0]}')">${t[1]}</button>`).join("")}
+
+function npcCard(id){const p=NPC[id];
+if(S.stage<p.s)return `<div class="card"><h3>${p.n}</h3><p class="mu">${p.t}. ${p.say}</p><p class="mu">Unlocks at ${STAGES[p.s]}.</p></div>`;
+let h=`<div class="card"><h3>${p.n}</h3><div class="mu">${p.t}</div><p>“${p.say}”</p>`;
+QS.filter(q=>q.g==id&&!S.done[q.id]&&(!q.after||S.done[q.after])&&S.stage>=(q.st||0)).forEach(q=>{
+const on=q.id in S.q,pr=prog(q),ok=on&&pr>=q.goal;
+h+=`<div class="q"><b>${q.n}</b><div class="mu">${q.d} Reward: ${rwText(q.rw)}</div>`+(on?`<div class="mu">Progress ${pr}/${q.goal}</div><div class="act"><button class="${ok?"go":""}" ${ok?"":"disabled"} onclick="A.turn(${q.id})">Turn in</button></div>`:`<div class="act"><button onclick="A.accept(${q.id})">Accept quest</button></div>`)+`</div>`});
+h+=`<div class="q">`;
+if(id=="baek"){const cs=25+S.str*8,cv=25+S.vit*8;
+h+=`<div class="act"><button ${S.gold<cs?"disabled":""} onclick="A.train('str',${cs})">Train strength (${cs}g)</button><button ${S.gold<cv?"disabled":""} onclick="A.train('vit',${cv})">Train vitality (${cv}g)</button></div>`;
+h+=teach([["wind",80,0],["iron",150,0]])}
+if(id=="yeon")h+=teach([["plum",500,2],["rain",2500,4]]);
+if(id=="ma"){h+=`<div class="act"><button ${S.gold<25?"disabled":""} onclick="A.buy('pill',25)">Healing pill (25g)</button>`+(S.weps.includes("iron")?"":`<button ${S.gold<200?"disabled":""} onclick="A.buy('iron',200)">Ironwood Sword (200g)</button>`)+`</div>`}
+return h+`</div></div>`}
+function teach(l){return l.map(([k,c,s])=>{const has=S.skills.includes(k)||S.scrolls.includes(k);
+return `<div class="act" style="align-items:center"><span class="mu" style="flex:1">${SK[k].n}: ${SK[k].d}</span>`+(has?`<span class="mu">Known</span>`:`<button ${S.gold<c||S.stage<s?"disabled":""} onclick="A.learn('${k}',${c})">${S.stage<s?"Needs "+STAGES[s]:"Learn ("+c+"g)"}</button>`)+`</div>`}).join("")}
+
+function view(){let h="";
+if(T=="village")h=Object.keys(NPC).map(npcCard).join("");
+if(T=="cultivate"){h=`<div class="card"><h3>Cultivation</h3><p class="mu">Meditate at a spot to gather qi. Fill the bar, then attempt a breakthrough to the next stage. Each stage raises health, qi and strength.</p>`;
+if(need()){const f=S.cp>=need();h+=`<div class="act"><button class="${f?"go":""}" ${f?"":"disabled"} onclick="A.brk()">Attempt breakthrough to ${STAGES[S.stage+1]}</button>${med!=null?`<button onclick="A.stop()">Stop meditating</button>`:""}</div>`}else h+=`<p class="g" style="color:var(--gd)">You have reached the Transcendent realm.</p>`;
+h+=`</div>`+SPOTS.map((s,i)=>{const lk=S.stage<s.s;return `<div class="card spot ${lk?"lock":""} ${med==i?"on":""}"><h3>${s.n}</h3><p class="mu">${s.d} Gain: ${s.r} qi/sec.</p><div class="act"><button ${lk||C?"disabled":""} onclick="A.med(${i})">${lk?"Needs "+STAGES[s.s]:med==i?"Meditating...":"Meditate here"}</button></div></div>`}).join("")}
+if(T=="dungeon"){h=`<div class="card"><h3>Hollow Mountain Dungeon</h3><div class="mu">Deepest floor: ${S.maxF}</div>`;
+if(C){h+=`<p class="foe">${C.n}${C.boss?" (Guardian)":""}</p>${bar(C.hp,C.max,"var(--hp)")}<div class="mu">Floor ${D.F} · ${Math.ceil(C.hp)}/${C.max} HP</div><div class="act"><button onclick="A.hit('s')">Strike</button>`+S.skills.map(k=>`<button ${S.qi<SK[k].qi?"disabled":""} onclick="A.hit('${k}')">${SK[k].n} (${SK[k].qi} qi)</button>`).join("")+`<button onclick="A.hit('g')">Guard</button><button ${S.pills?"":"disabled"} onclick="A.hit('p')">Pill (${S.pills})</button><button class="dn" onclick="A.hit('f')">Flee</button></div>`}
+else if(D.in)h+=`<p>Floor ${D.F} cleared.</p><div class="act"><button class="go" onclick="A.next()">Descend to floor ${D.F+1}</button><button onclick="A.leave()">Leave the dungeon</button></div>`;
+else{const cp=Math.floor(S.maxF/5)*5;h+=`<p class="mu">Monsters grow stronger each floor and a guardian waits every fifth floor. Defeat foes for XP, gold, weapons and martial scrolls.</p><div class="act"><button class="go" onclick="A.enter(1)">Enter floor 1</button>`+(cp>=5?`<button onclick="A.enter(${cp+1})">Enter floor ${cp+1}</button>`:"")+`</div>`}
+h+=`</div>`}
+if(T=="self"){h=`<div class="card"><h3>${STAGES[S.stage]}, level ${S.lv}</h3><p class="mu">Strength ${S.str} · Vitality ${S.vit} · Weapon ${WP[S.wp].n} (+${wa()}) · Healing pills ${S.pills}</p><div class="act"><button ${S.pills&&!C?"":"disabled"} onclick="A.pill()">Use healing pill</button></div></div>`;
+h+=`<div class="card"><h3>Martial arts</h3>`+(S.skills.length?S.skills.map(k=>`<p><b>${SK[k].n}</b> <span class="mu">${SK[k].d} Costs ${SK[k].qi} qi.</span></p>`).join(""):`<p class="mu">None learned yet. Train with Master Baek or find scrolls.</p>`)+S.scrolls.map(k=>`<div class="act" style="align-items:center"><span>Scroll: ${SK[k].n}</span><button onclick="A.study('${k}')">Study</button></div>`).join("")+`</div>`;
+h+=`<div class="card"><h3>Weapons</h3>`+S.weps.map(k=>`<div class="act" style="align-items:center"><span style="flex:1">${WP[k].n} (+${WP[k].a})</span><button ${S.wp==k?"disabled":""} onclick="A.eq('${k}')">${S.wp==k?"Equipped":"Equip"}</button></div>`).join("")+`</div><div class="act"><button class="dn" onclick="A.reset()">Reset save</button></div>`}
+document.getElementById("view").innerHTML=h;hud()}
+
+function spawn(){const F=D.F,boss=F%5==0,t=Math.min(4,Math.floor((F-1)/4));
+const hp=Math.round((25+F*14)*(boss?2.5:1));
+C={n:rnd(FOES[t]),boss,hp,max:hp,atk:(4+F*2.6)*(boss?1.4:1)};if(F>S.maxF)S.maxF=F;
+log((boss?"A guardian blocks floor ":"Floor ")+F+": "+C.n+" appears.","r")}
+function drop(F,boss){
+if(Math.random()<(boss?1:.1)){const w=F<4?"iron":F<9?"moon":"azure";if(!S.weps.includes(w)){S.weps.push(w);log("Found weapon: "+WP[w].n+"!","g")}else if(boss){S.gold+=F*40;log("The guardian’s hoard holds "+F*40+" extra gold.","g")}}
+if(Math.random()<(boss?.6:.07)){const pool=["wind","iron"];if(F>=5)pool.push("plum");if(F>=10)pool.push("rain");const un=pool.filter(x=>!S.skills.includes(x)&&!S.scrolls.includes(x));if(un.length){const s=rnd(un);S.scrolls.push(s);log("Found a martial scroll: "+SK[s].n+"!","g")}}
+if(Math.random()<.2){S.pills++;log("Found a healing pill.","g")}}
+
+function turn(k){let guard=false,dmg=0;const base=S.str+wa();
+if(k=="f"){if(Math.random()<.6){log("You escape the dungeon.");C=null;D.in=false;return}log("You fail to escape!","r")}
+else if(k=="s"){dmg=Math.round(base*(.85+Math.random()*.3));log(`You strike for ${dmg}.`)}
+else if(k=="g"){guard=true;S.qi=Math.min(mq(),S.qi+6);log("You brace and steady your qi.","c")}
+else if(k=="p"){if(!S.pills)return;S.pills--;S.hp=Math.min(mh(),S.hp+mh()*.5);log("You swallow a healing pill.","c")}
+else{const s=SK[k];if(S.qi<s.qi)return;S.qi-=s.qi;if(s.m){dmg=Math.round(base*s.m*(.9+Math.random()*.2));log(`${s.n} hits for ${dmg}!`,"c")}else{S.hp=Math.min(mh(),S.hp+mh()*s.h);log(s.n+" restores your body.","c")}}
+C.hp-=dmg;
+if(C.hp<=0){const F=D.F,b=C.boss,xp=Math.round((10+F*6)*(b?3:1)),g=Math.round((6+F*5)*(b?3:1));log(`${C.n} falls. +${xp} XP, +${g} gold.`,"g");S.kills++;drop(F,b);C=null;gain(xp,g);return}
+let e=Math.max(1,Math.round(C.atk*(.8+Math.random()*.4)-S.vit*.4));if(guard)e=Math.ceil(e/2);
+S.hp-=e;S.qi=Math.min(mq(),S.qi+2);log(`${C.n} hits you for ${e}.`,"r");
+if(S.hp<=0){log("You collapse. Villagers drag you home and some of your gold is lost.","r");S.gold=Math.floor(S.gold/2);S.hp=mh()/2;C=null;D.in=false;T="village"}}
+
+const A={
+tab(t){T=t;view()},
+accept(id){S.q[id]=QS.find(q=>q.id==id).ty=="kill"?S.kills:QS.find(q=>q.id==id).ty=="cp"?S.totCp:0;log("Quest accepted: "+QS.find(q=>q.id==id).n);save();view()},
+turn(id){const q=QS.find(q=>q.id==id),r=q.rw;if(r.gold)S.gold+=r.gold;if(r.wp&&!S.weps.includes(r.wp))S.weps.push(r.wp);if(r.sc&&!S.skills.includes(r.sc)&&!S.scrolls.includes(r.sc))S.scrolls.push(r.sc);if(r.pills)S.pills+=r.pills;delete S.q[id];S.done[id]=1;log(`Quest complete: ${q.n}. Received ${rwText(r)}.`,"g");if(r.xp)gain(r.xp,0);save();view()},
+train(k,c){if(S.gold<c)return;S.gold-=c;S[k]++;log("Master Baek drills you until dusk. "+(k=="str"?"Strength":"Vitality")+" +1.","g");save();view()},
+learn(k,c){if(S.gold<c)return;S.gold-=c;S.skills.push(k);log("You learn "+SK[k].n+".","g");save();view()},
+buy(k,c){if(S.gold<c)return;S.gold-=c;if(k=="pill")S.pills++;else S.weps.push(k);log("Purchased from Peddler Ma.");save();view()},
+med(i){med=i;log("You sit and begin to circulate qi at the "+SPOTS[i].n+".","c");view()},
+stop(){med=null;view()},
+brk(){if(S.cp<need())return;if(Math.random()<.85){S.stage++;S.cp=0;S.str+=3;S.vit+=3;S.hp=mh();S.qi=mq();log("Breakthrough! You reach "+STAGES[S.stage]+". New cultivation spots open.","g")}else{S.cp=Math.floor(S.cp/2);S.hp=Math.max(1,S.hp-mh()*.25);log("Your qi deviates. The breakthrough fails and half your progress scatters.","r")}save();view()},
+enter(f){if(S.hp<mh()*.3){log("You are too wounded. Rest or use a pill first.","r");return}med=null;D={F:f-1,in:true};A.next()},
+next(){D.F++;spawn();view()},
+leave(){D.in=false;log("You climb back out of the dungeon.");save();view()},
+hit(k){turn(k);save();view()},
+pill(){if(!S.pills)return;S.pills--;S.hp=Math.min(mh(),S.hp+mh()*.5);save();view()},
+study(k){S.scrolls=S.scrolls.filter(x=>x!=k);if(!S.skills.includes(k))S.skills.push(k);log("You study the scroll and master "+SK[k].n+".","g");save();view()},
+eq(k){S.wp=k;save();view()},
+reset(){if(confirm("Erase your save and start over?")){S=fresh();C=null;D={F:0,in:false};med=null;save();LG=[];log("A new wanderer arrives in the village.");view()}}};
+
+setInterval(()=>{if(med==null||C)return;let ch=false;
+if(need()&&S.cp<need()){const g=Math.min(SPOTS[med].r*(1+S.lv*.03),need()-S.cp);S.cp+=g;S.totCp+=g;ch=true}
+S.hp=Math.min(mh(),S.hp+mh()*.01);S.qi=Math.min(mq(),S.qi+1.5);hud();if(T=="cultivate")view();if(ch&&Math.floor(S.totCp)%20==0)save()},1000);
+log("You arrive at Greenpine Village with a rusty sword and a dream. Speak with Elder Han.");
+view();
+</script>
+</body>
+</html>
